@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Route Optimizer Pro</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary: #2563eb;
+            --success: #059669;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --border: #e2e8f0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            background-color: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            padding: 0.75rem 1.5rem;
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+            font-weight: 700;
+            z-index: 100;
+        }
+
+        .main-container {
+            display: grid;
+            grid-template-columns: 300px 6px 350px 6px 1fr;
+            flex-grow: 1;
+            height: calc(100vh - 50px);
+            position: relative;
+        }
+
+        .gutter {
+            background: var(--border);
+            cursor: col-resize;
+            transition: background 0.2s;
+            z-index: 20;
+        }
+
+        .gutter:hover, .gutter.active { background: var(--primary); }
+
+        .panel {
+            background: var(--card);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-width: 150px;
+        }
+
+        .panel-header {
+            padding: 1rem;
+            font-weight: 600;
+            background: #f1f5f9;
+            border-bottom: 1px solid var(--border);
+        }
+
+        textarea {
+            flex-grow: 1;
+            border: none;
+            padding: 1rem;
+            resize: none;
+            outline: none;
+            font-family: inherit;
+            font-size: 0.9rem;
+        }
+
+        #address-list {
+            list-style: none;
+            padding: 1rem;
+            margin: 0;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .address-item {
+            background: #fff;
+            margin-bottom: 0.5rem;
+            padding: 0.6rem;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            border: 1px solid var(--border);
+            font-size: 0.85rem;
+        }
+
+        .badge {
+            background: var(--primary);
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .custom-div-icon {
+            background: var(--primary);
+            border: 2px solid white;
+            border-radius: 50%;
+            color: white;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            font-size: 12px;
+        }
+
+        .btn-area {
+            padding: 1rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .secondary-btns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+        }
+
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.8rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-family: inherit;
+        }
+
+        .btn-alt { background: #64748b; font-size: 0.8rem; }
+        .btn-success { background: var(--success); }
+
+        #map { height: 100%; width: 100%; z-index: 1; }
+
+        @media (max-width: 768px) {
+            body { overflow-y: auto; }
+            .main-container { display: flex; flex-direction: column; height: auto; }
+            .gutter { display: none; }
+            .panel { height: auto; min-height: unset; }
+            textarea { min-height: 150px; }
+            #address-list { max-height: 300px; }
+            #map { height: 400px; order: -1; }
+            header { text-align: center; }
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.9);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .progress-container {
+            width: 60%;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 10px;
+            margin-top: 15px;
+            overflow: hidden;
+        }
+
+        #progress-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--primary);
+            transition: width 0.1s linear;
+        }
+    </style>
+</head>
+<body>
+
+<header>Route Optimizer Pro</header>
+
+<div class="main-container" id="grid">
+    <div class="panel">
+        <div class="panel-header">1. Locations</div>
+        <textarea id="address-input" placeholder="Paste addresses (one per line)..."></textarea>
+        <div class="btn-area">
+            <button id="geocode-btn">Fetch & Pin Locations</button>
+        </div>
+    </div>
+
+    <div class="gutter" id="gutter1"></div>
+
+    <div class="panel">
+        <div class="panel-header">2. Sequence</div>
+        <ul id="address-list"></ul>
+        <div class="btn-area">
+            <button id="optimize-btn" class="btn-success">Optimize Route</button>
+            <div class="secondary-btns">
+                <button id="copy-route-btn" class="btn-alt">Copy Route</button>
+                <button id="email-route-btn" class="btn-alt">Email Route</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="gutter" id="gutter2"></div>
+
+    <div class="panel" style="position: relative;">
+        <div id="loading" class="loading-overlay">
+            <div id="loading-text" style="font-weight: 600;">Geocoding...</div>
+            <div class="progress-container">
+                <div id="progress-fill"></div>
+            </div>
+        </div>
+        <div id="map"></div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+
+<script>
+    // --- GLOBAL STATE ---
+    let map, markers = [], polyline = null, locations = [];
+    
+    // Fix: Use a plain object for caching because Map doesn't stringify to JSON correctly
+    let geoCache = JSON.parse(localStorage.getItem('geoCache') || '{}');
+
+    // --- URL SYNC LOGIC ---
+    const syncTextToURL = () => {
+        const text = document.getElementById('address-input').value;
+        const url = new URL(window.location);
+        if (text.trim()) {
+            url.searchParams.set('addr', encodeURIComponent(text));
+        } else {
+            url.searchParams.delete('addr');
+        }
+        window.history.replaceState({}, '', url);
+    };
+
+    const loadTextFromURL = () => {
+        const params = new URLSearchParams(window.location.search);
+        const data = params.get('addr');
+        if (data) {
+            document.getElementById('address-input').value = decodeURIComponent(data);
+        }
+    };
+
+    // --- COLUMN RESIZING ---
+    const grid = document.getElementById('grid');
+    const g1 = document.getElementById('gutter1');
+    const g2 = document.getElementById('gutter2');
+    let activeGutter = null;
+
+    [g1, g2].forEach(g => {
+        g.addEventListener('mousedown', (e) => {
+            activeGutter = e.target;
+            activeGutter.classList.add('active');
+            document.body.style.cursor = 'col-resize';
+        });
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!activeGutter) return;
+        const rect = grid.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        let cols = grid.style.gridTemplateColumns.split(' ');
+        if (!cols[0]) cols = ['300px', '6px', '350px', '6px', '1fr'];
+
+        if (activeGutter === g1) {
+            cols[0] = `${Math.max(100, x)}px`;
+        } else {
+            const p1Width = grid.children[0].offsetWidth;
+            cols[2] = `${Math.max(100, x - p1Width - 6)}px`;
+        }
+        grid.style.gridTemplateColumns = cols.join(' ');
+        if(map) map.invalidateSize();
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (activeGutter) activeGutter.classList.remove('active');
+        activeGutter = null;
+        document.body.style.cursor = 'default';
+    });
+
+    // --- GEOCODING & MAP LOGIC ---
+    function initMap() {
+        map = L.map('map').setView([20, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    }
+
+    async function fetchFromNetwork(address) {
+        try {
+            const resp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`);
+            const data = await resp.json();
+            if (data && data.length > 0) {
+                const res = { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+                // Fix: Save to object cache
+                geoCache[address] = res;
+                localStorage.setItem('geoCache', JSON.stringify(geoCache));
+                return res;
+            }
+        } catch(e) { console.error(e); }
+        return null;
+    }
+
+    const updateDisplay = (drawRoute = false) => {
+        const listEl = document.getElementById('address-list');
+        listEl.innerHTML = '';
+        markers.forEach(m => map.removeLayer(m));
+        markers = [];
+        if (polyline) map.removeLayer(polyline);
+
+        const bounds = L.latLngBounds();
+        locations.forEach((loc, index) => {
+            const label = String.fromCharCode(65 + index);
+            const li = document.createElement('li');
+            li.className = 'address-item';
+            li.innerHTML = `<span class="badge">${label}</span> <span>${loc.addr}</span>`;
+            li.onclick = () => map.flyTo([loc.lat, loc.lon], 15);
+            listEl.appendChild(li);
+
+            const icon = L.divIcon({ className: 'custom-div-icon', html: `<span>${label}</span>`, iconSize: [26, 26] });
+            markers.push(L.marker([loc.lat, loc.lon], {icon}).addTo(map));
+            bounds.extend([loc.lat, loc.lon]);
+        });
+        if (locations.length > 0) map.fitBounds(bounds, { padding: [50, 50] });
+        if (drawRoute && locations.length > 1) {
+            const pts = [...locations.map(l => [l.lat, l.lon]), [locations[0].lat, locations[0].lon]];
+            polyline = L.polyline(pts, {color: '#2563eb', weight: 3, dashArray: '5, 10'}).addTo(map);
+        }
+    };
+
+    // --- EVENT LISTENERS ---
+    document.getElementById('address-input').addEventListener('input', syncTextToURL);
+
+    document.getElementById('geocode-btn').addEventListener('click', async () => {
+        const lines = document.getElementById('address-input').value.split('\n').filter(l => l.trim());
+        if (!lines.length) return;
+
+        const overlay = document.getElementById('loading');
+        const bar = document.getElementById('progress-fill');
+        const text = document.getElementById('loading-text');
+        
+        overlay.style.display = 'flex';
+        locations = [];
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            const progress = ((i + 1) / lines.length) * 100;
+            bar.style.width = `${progress}%`;
+            text.innerText = `Processing ${i + 1} of ${lines.length}...`;
+
+            if (geoCache[line]) {
+                locations.push({ addr: line, ...geoCache[line] });
+                await new Promise(r => setTimeout(r, 40)); 
+            } else {
+                const coords = await fetchFromNetwork(line);
+                if (coords) locations.push({ addr: line, ...coords });
+                await new Promise(r => setTimeout(r, 1000)); // Respect API limits
+            }
+        }
+        overlay.style.display = 'none';
+        updateDisplay(false);
+    });
+
+    document.getElementById('optimize-btn').addEventListener('click', () => {
+        if (locations.length < 3) { updateDisplay(true); return; }
+        let route = [locations[0]], unvisited = locations.slice(1);
+        while(unvisited.length > 0) {
+            let last = route[route.length - 1];
+            unvisited.sort((a, b) => Math.hypot(a.lat - last.lat, a.lon - last.lon) - Math.hypot(b.lat - last.lat, b.lon - last.lon));
+            route.push(unvisited.shift());
+        }
+        locations = route;
+        updateDisplay(true);
+    });
+
+    const getShareData = () => {
+        const d = [...locations];
+        if (d.length > 1) d.push({...d[0], label: "Return to A"});
+        return d.map((l, i) => {
+            const label = l.label || String.fromCharCode(65 + i);
+            return {
+                label,
+                addr: l.addr,
+                url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(l.addr)}`
+            };
+        });
+    };
+
+    document.getElementById('copy-route-btn').addEventListener('click', () => {
+        if (!locations.length) return;
+        let html = `<div style="font-family:sans-serif;"><ul style="list-style:none;padding:0;">`;
+        getShareData().forEach(it => {
+            html += `<li style="margin-bottom:8px;"><strong>${it.label}:</strong> <a href="${it.url}">${it.addr}</a></li>`;
+        });
+        html += `</ul></div>`;
+        const blob = new Blob([html], { type: "text/html" });
+        navigator.clipboard.write([new ClipboardItem({ "text/html": blob })]).then(() => alert("Route copied!"));
+    });
+
+    document.getElementById('email-route-btn').addEventListener('click', () => {
+        if (!locations.length) return;
+        let body = "Route Directions:\n\n";
+        getShareData().forEach(it => body += `${it.label}: ${it.addr}\n${it.url}\n\n`);
+        window.location.href = `mailto:?subject=Route Directions&body=${encodeURIComponent(body)}`;
+    });
+
+    new Sortable(document.getElementById('address-list'), {
+        animation: 150,
+        onEnd: (evt) => {
+            const moved = locations.splice(evt.oldIndex, 1)[0];
+            locations.splice(evt.newIndex, 0, moved);
+            updateDisplay(false);
+        }
+    });
+
+    // Initialize
+    window.onload = () => {
+        loadTextFromURL();
+        initMap();
+    };
+</script>
+</body>
+</html>
